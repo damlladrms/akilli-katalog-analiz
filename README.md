@@ -1,2 +1,8 @@
 # Akıllı Katalog Analiz Sistemi
-Bu proje ürün kataloglarının doğruluğunu kontrol etmek için geliştirilmiştir.
+
+Bu uygulama, e-ticaret kataloglarındaki ürünleri analiz ederek:
+- Kategori tutarlılığı
+- Yazım hataları
+- Görsel kalitesi
+- Katalog skoru
+- Kategori önerileri sunar.
