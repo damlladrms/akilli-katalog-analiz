@@ -2,63 +2,56 @@
 import streamlit as st
 import pandas as pd
 import difflib
-from PIL import Image
-import os
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-st.set_page_config(page_title="Akıllı Katalog Analiz", layout="wide")
+# Sayfa başlığı
+st.set_page_config(page_title="Akıllı Katalog Analiz Sistemi", layout="wide")
+st.title("📦 Akıllı Katalog Analiz Sistemi")
 
-st.title("🧠 Akıllı Katalog Analiz Sistemi")
+st.markdown("Katalog dosyasını yükleyin (.csv veya .xlsx)")
 
-uploaded_file = st.file_uploader("Lütfen katalog dosyasını (.xlsx) yükleyin", type=["xlsx"])
+uploaded_file = st.file_uploader("Dosya yükleyerek başlayın.", type=["csv", "xlsx"])
 
-def spelling_check(word):
-    dictionary = ["elbise", "mont", "kulaklık", "ayakkabı", "çanta", "pantolon"]
-    matches = difflib.get_close_matches(word.lower(), dictionary, n=1, cutoff=0.8)
-    return matches[0] if matches else None
+def load_data(file):
+    if file.name.endswith('.csv'):
+        df = pd.read_csv(file)
+    else:
+        df = pd.read_excel(file)
+    return df
+
+def check_spelling(title):
+    kelimeler = title.split()
+    suggestions = []
+    for kelime in kelimeler:
+        if len(kelime) > 15 or any(c.isdigit() for c in kelime):
+            suggestions.append(kelime)
+    return len(suggestions) > 0
+
+def kategori_uyusmazligi(mevcut, tahmin):
+    return mevcut.strip().lower() != tahmin.strip().lower()
+
+def kategori_tahmin_et(baslik):
+    if any(x in baslik.lower() for x in ["mont", "ceket", "elbise", "pantolon"]):
+        return "Giyim"
+    elif any(x in baslik.lower() for x in ["ayakkabı", "bot"]):
+        return "Ayakkabı"
+    elif any(x in baslik.lower() for x in ["kulaklık", "bluetooth", "telefon"]):
+        return "Elektronik"
+    else:
+        return "Diğer"
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+    df = load_data(uploaded_file)
 
-    if not all(col in df.columns for col in ["title", "category", "subcategory"]):
-        st.error("⛔ Gerekli sütunlar eksik. Lütfen 'title', 'category', 'subcategory' sütunlarını içeren dosya yükleyin.")
+    if not {"title", "category"}.issubset(df.columns):
+        st.error("⛔ Gerekli sütunlar eksik. Lütfen 'title' ve 'category' başlıklarını içeren dosya yükleyin.")
     else:
+        df["tahmin_edilen_kategori"] = df["title"].apply(kategori_tahmin_et)
+        df["kategori_uyusmazligi"] = df.apply(lambda x: kategori_uyusmazligi(x["category"], x["tahmin_edilen_kategori"]), axis=1)
+        df["yazim_sorunu"] = df["title"].apply(check_spelling)
+
         st.success("✅ Dosya başarıyla yüklendi.")
+        st.subheader("📊 Analiz Sonuçları")
 
-        analiz_sonuclari = []
-        for _, row in df.iterrows():
-            title = str(row["title"])
-            category = str(row["category"])
-            subcategory = str(row["subcategory"])
-
-            # Yazım kontrolü
-            corrected_title = spelling_check(title.split()[0]) or title.split()[0]
-            spelling_issue = corrected_title != title.split()[0]
-
-            # Kategori önerisi
-            keyword_map = {
-                "kulaklık": "Elektronik",
-                "mont": "Giyim",
-                "elbise": "Giyim",
-                "ayakkabı": "Giyim",
-                "çanta": "Aksesuar",
-                "pantolon": "Giyim"
-            }
-
-            predicted_cat = ""
-            for keyword, cat in keyword_map.items():
-                if keyword in title.lower():
-                    predicted_cat = cat
-                    break
-
-            cat_match = predicted_cat == category
-
-            analiz_sonuclari.append({
-                "Ürün Başlığı": title,
-                "Mevcut Kategori": category,
-                "Tahmin Edilen Kategori": predicted_cat or "-",
-                "Kategori Uyuşuyor mu?": "✅" if cat_match else "❌",
-                "Yazım Sorunu": "⚠️" if spelling_issue else "✅"
-            })
-
-        st.markdown("### 📊 Analiz Sonuçları")
-        st.dataframe(pd.DataFrame(analiz_sonuclari))
+        st.dataframe(df[["title", "category", "tahmin_edilen_kategori", "kategori_uyusmazligi", "yazim_sorunu"]])
