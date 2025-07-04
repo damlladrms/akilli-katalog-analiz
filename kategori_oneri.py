@@ -1,10 +1,13 @@
+
 def kategori_tahmin_et(title):
     title = title.lower()
-    if any(x in title for x in ["ayakkabı", "sneaker", "bot"]):
+    if "ayakkabı" in title:
         return "Ayakkabı"
-    elif any(x in title for x in ["elbise", "ceket", "mont", "gömlek", "pantolon"]):
+    elif "elbis" in title:
         return "Giyim"
-    elif any(x in title for x in ["telefon", "kulaklık", "laptop"]):
+    elif "kulaklık" in title:
         return "Elektronik"
-    else:
-        return "Diğer"
+    elif "mont" in title:
+        return "Giyim"
+    return "Diğer"
+    

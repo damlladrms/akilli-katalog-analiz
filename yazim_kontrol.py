@@ -1,2 +1,5 @@
-def yazim_hatasi_var_mi(text):
-    return any(word for word in text.split() if len(word) > 15 or word.count("ttt") > 0)
+
+def yazim_var_mi(title):
+    hatali_kelime = "elbisee"  # örnek yazım hatası
+    return hatali_kelime in title.lower()
+    
