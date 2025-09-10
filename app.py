@@ -1,25 +1,23 @@
-# app.py  —  AKILLI KATALOG ANALİZ (tam ve sade)
+# app.py — Akıllı Katalog Analiz (önerili + görsel analizi)
 
 import streamlit as st
 import pandas as pd
+import re
 
-# ---- Yerel modüller (aynı klasörde) ----
+# Yerel modüller
 from yazim_kontrol import quick_spelling_checks
 from kategori_oneri import suggest_category
 from kalite_skori import compute_quality_score
-from gorsel_kontrol import check_image_text_match_placeholder
+from gorsel_kontrol import analyze_image
 
 
-# ---------------- Yardımcılar ----------------
+# --- Yardımcılar ---
 def read_table(uploaded_file):
-    """CSV/XLSX dosyayı oku ve kolon adlarını normalize et"""
     name = uploaded_file.name.lower()
     if name.endswith((".xlsx", ".xls")):
         df = pd.read_excel(uploaded_file)
     else:
-        # ayraç otomatik tespiti için engine="python", sep=None
         df = pd.read_csv(uploaded_file, sep=None, engine="python")
-    # kolon adlarını normalize et
     df.columns = (
         pd.Series(df.columns)
         .astype(str)
@@ -29,19 +27,76 @@ def read_table(uploaded_file):
     )
     return df
 
-
 def pick_col(df, candidates):
-    """Aday kolon isimlerinden ilk bulduğunu döndür"""
     for c in candidates:
         if c in df.columns:
             return c
     return None
 
+# Marka yazım kontrolü (kısalık/ALL CAPS cezası yok)
+def brand_quick_check(text: str):
+    t = (text or "").strip()
+    flags = []
+    if re.search(r"([A-Za-zÇĞİÖŞÜçğıöşü])\1{2,}", t): flags.append("char_repetition")
+    if re.search(r"\s{2,}", t): flags.append("multi_space")
+    return {"flags": flags, "len": len(t)}
 
-# ---------------- UI ----------------
+# Basit öneriler
+def suggest_title(title: str):
+    if not title: return ""
+    t = re.sub(r"([A-Za-zÇĞİÖŞÜçğıöşü])\1{2,}", r"\1", title)
+    t = re.sub(r"\s{2,}", " ", t).strip()
+    return t if t != title else ""
+
+def suggest_subcategory(input_category, sub_category):
+    SUB_OK = {
+        "Elektronik":{"Kulaklık","Telefon","Bilgisayar","Aksesuar","Hoparlör"},
+        "Giyim":{"Elbise","Tişört","Pantolon","Etek","Ceket","Mont","Gömlek"},
+        "Ayakkabı":{"Spor Ayakkabı","Bot","Sandalet","Topuklu"},
+    }
+    cat = (input_category or "").strip()
+    sub = (sub_category or "").strip()
+    if not cat or cat not in SUB_OK or not sub: return ""
+    if sub in SUB_OK[cat]: return ""
+    for cand in SUB_OK[cat]:
+        if cand.lower().split()[0] in sub.lower() or sub.lower().split()[0] in cand.lower():
+            return cand
+    return next(iter(SUB_OK[cat]))
+
+def suggest_price(price):
+    try:
+        p = float(price)
+        return "" if p > 0 else "Bir fiyat girin (>0)"
+    except:
+        return "Bir fiyat girin (>0)"
+
+def suggest_stock(stock):
+    try:
+        s = float(stock)
+        return "" if s >= 0 else "Stok bilgisini girin (≥0)"
+    except:
+        return "Stok bilgisini girin (≥0)"
+
+def suggest_status(status, stock):
+    stt = (str(status or "")).strip().lower()
+    try: s = float(stock)
+    except: s = None
+    if stt in {"aktif","active"} and s == 0: return "Pasif"
+    if stt in {"pasif","inactive"} and (s is not None and s > 0): return "Aktif"
+    return ""
+
+def suggest_image(img_dict, image_url):
+    s = (img_dict or {}).get("status")
+    if s == "missing": return "Görsel ekleyin (http… .jpg/.png)"
+    if s == "invalid": return "URL http/https ile başlamalı"
+    if s == "conflict": return "Başlığa uygun görsel kullanın"
+    return ""
+
+
+# --- UI ---
 st.set_page_config(page_title="Akıllı Katalog Analiz", layout="wide")
 st.title("🧠 Akıllı Katalog Analiz")
-st.caption("CSV/XLSX yükle; yazım, kategori, fiyat, stok, görsel ve kalite skoru hesapla.")
+st.caption("CSV/XLSX yükle; yazım, kategori, fiyat, stok, görsel ve kalite skoru + öneriler.")
 
 uploaded = st.file_uploader("CSV veya Excel yükleyin", type=["csv", "xlsx", "xls"])
 
@@ -53,8 +108,8 @@ if not uploaded:
             - **title / başlık / ürün adı**
             - **category / kategori**
             
-            İsteğe bağlı ama önerilir:
-            - **subcategory (alt_kategori)**, **brand (marka)**, **price (fiyat)**, **stock (stok)**, **status (durum/statü)**, **image_url (görsel)**
+            İsteğe bağlı:
+            - **subcategory (alt_kategori)**, **brand (marka)**, **price (fiyat)**, **stock (stok)**, **status (durum)**, **image_url (görsel)**
             """
         )
     st.stop()
@@ -62,27 +117,21 @@ if not uploaded:
 df = read_table(uploaded)
 
 # Kolon eşleme
-title_col  = pick_col(df, ["title","başlık","urun_adi","ürün adı","product_title","name"])
+title_col  = pick_col(df, ["title","başlık","urun_adi","ürün adı"])
 cat_col    = pick_col(df, ["category","kategori"])
-subcat_col = pick_col(df, ["subcategory","sub_category","alt_kategori","alt kategori"])
+subcat_col = pick_col(df, ["subcategory","sub_category","alt_kategori"])
 brand_col  = pick_col(df, ["brand","marka"])
 price_col  = pick_col(df, ["price","fiyat"])
 stock_col  = pick_col(df, ["stock","stok"])
 status_col = pick_col(df, ["status","statü","durum"])
-img_col    = pick_col(df, ["image_url","image","image_path","görsel","gorsel","image link"])
+img_col    = pick_col(df, ["image_url","image","image_path","görsel"])
 
-# Minimum gereksinim kontrolü
 if not title_col or not cat_col:
-    st.error(
-        f"Gerekli kolonlar bulunamadı.\n\n"
-        f"Mevcut kolonlar: {list(df.columns)}\n\n"
-        f"En azından **title**/**başlık** ve **category**/**kategori** olmalı."
-    )
+    st.error(f"En azından **title**/**başlık** ve **category**/**kategori** olmalı.\n\nMevcut kolonlar: {list(df.columns)}")
     st.stop()
 
 rows = []
 for _, r in df.iterrows():
-    # --- Satır verilerini oku ---
     title = str(r.get(title_col, "") or "")
     input_category = str(r.get(cat_col, "") or "")
     subcat = str(r.get(subcat_col, "") or "") if subcat_col else ""
@@ -92,16 +141,13 @@ for _, r in df.iterrows():
     status = r.get(status_col, None) if status_col else None
     image_url = str(r.get(img_col, "") or "") if img_col else ""
 
-    # --- Yazım kontrolleri ---
     spell_title = quick_spelling_checks(title)
     spell_sub   = quick_spelling_checks(subcat) if subcat else {"flags": [], "len": 0}
-    spell_brand = quick_spelling_checks(brand)  if brand  else {"flags": [], "len": 0}
+    spell_brand = brand_quick_check(brand) if brand else {"flags": [], "len": 0}
 
-    # --- Kategori önerisi & görsel kontrolü ---
     suggested_category, _ = suggest_category(title, input_category)
-    img_match = check_image_text_match_placeholder(title, image_url)
+    img_match = analyze_image(title, image_url)
 
-    # --- Kalite skoru (TÜM parametreler isimli) ---
     score, issue = compute_quality_score(
         spell=spell_title,
         input_category=input_category,
@@ -113,26 +159,29 @@ for _, r in df.iterrows():
         sub_category=subcat,
         spell_sub=spell_sub,
         spell_brand=spell_brand,
-        extra_spelling_issue=False,  # istersen True ya da kendi hesabın
+        extra_spelling_issue=False,
+        status_text=status,
     )
 
-    # --- Sonuç satırı ---
-    rows.append(
-        {
-            "title": title,
-            "category": input_category,
-            "subcategory": subcat,
-            "brand": brand,
-            "price": price,
-            "stock": stock,
-            "status": status,
-            "image_path": image_url if image_url else None,
-            "Recommended Category": suggested_category,
-            "Kalite Skoru": score,
-            "Analiz Sonucu": issue,
-            "yazim_sorunu": bool(spell_title["flags"] or spell_sub["flags"] or spell_brand["flags"]),
-        }
-    )
+    rows.append({
+        "title": title,
+        "category": input_category,
+        "subcategory": subcat,
+        "brand": brand,
+        "price": price,
+        "stock": stock,
+        "status": status,
+        "image_path": image_url if image_url else None,
+        "Recommended Category": suggested_category,
+        "Kalite Skoru": score,
+        "Analiz Sonucu": issue,
+        "Öneri Başlık": suggest_title(title),
+        "Öneri Alt Kategori": suggest_subcategory(input_category, subcat),
+        "Öneri Fiyat": suggest_price(price),
+        "Öneri Stok": suggest_stock(stock),
+        "Öneri Statü": suggest_status(status, stock),
+        "Öneri Görsel": suggest_image(img_match, image_url),
+    })
 
 out = pd.DataFrame(rows)
 
