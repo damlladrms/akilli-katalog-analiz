@@ -1,11 +1,11 @@
-import os
+# gorsel_kontrol.py
 
-def gorsel_kalite_kontrolu(path):
-    if not path or not isinstance(path, str):
-        return "Eksik"
-    elif "bozuk" in path.lower() or "hata" in path.lower():
-        return "Bozuk"
-    elif path.lower().endswith((".jpg", ".jpeg", ".png")):
-        return "İyi"
-    else:
-        return "Format Dışı"
+def check_image_text_match_placeholder(title: str, image_url: str):
+    """
+    Basit kontrol: 
+    - Başlık en az 5 karakter olacak
+    - Görsel URL'si 'http' ile başlayacak
+    """
+    title_ok = len((title or "").strip()) >= 5
+    url_ok = bool(image_url) and str(image_url).startswith("http")
+    return {"match": bool(title_ok and url_ok)}
