@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
-import re
+
+# ŞİMDİLİK kökteki Türkçe dosyaları kullan
+from yazim_kontrol import quick_spelling_checks
+from kategori_oneri import suggest_category
+from kalite_skori import compute_quality_score
+from gorsel_kontrol import check_image_text_match_placeholder
 
 # ---------------- Helpers (tek dosyada) ----------------
 
