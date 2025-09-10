@@ -4,8 +4,9 @@ def compute_quality_score(
     spell, input_category, suggested_category, img_match,
     price=None, stock=None, status=None, sub_category=None,
     spell_sub=None, spell_brand=None,
-    extra_spelling_issue=False,   # app.py'den gelebilir
-    **kwargs                      # ileride yeni parametre gelirse hata vermesin
+    extra_spelling_issue=False,
+    status_text=None,
+    **kwargs
 ):
     score = 100
     flags = []
@@ -30,7 +31,7 @@ def compute_quality_score(
         score -= 5
         flags.append("brand_spelling")
 
-    # --- Diğer alanlardan gelen toplu yazım uyarısı ---
+    # Diğer alanlardan yazım uyarısı
     if extra_spelling_issue:
         score -= 8
         flags.append("spelling_issue_other_fields")
@@ -40,7 +41,7 @@ def compute_quality_score(
         score -= 20
         flags.append("category_mismatch")
 
-    # --- (İsteğe bağlı) Alt kategori uyumu ---
+    # --- Alt kategori uyumu ---
     SUB_OK = {
         "Elektronik": {"Kulaklık", "Telefon", "Bilgisayar", "Aksesuar", "Hoparlör"},
         "Giyim": {"Elbise", "Tişört", "Pantolon", "Etek", "Ceket", "Mont", "Gömlek"},
@@ -53,10 +54,18 @@ def compute_quality_score(
             score -= 15
             flags.append("subcategory_mismatch")
 
-    # --- Görsel–metin uyumu (placeholder) ---
-    if not img_match.get("match", False):
+    # --- Görsel puanlama ---
+    img_status = (img_match or {}).get("status")
+    if img_status == "missing":
+        score -= 10
+        flags.append("missing_image")
+    elif img_status == "invalid":
+        score -= 15
+        flags.append("invalid_image_url")
+    elif img_status == "conflict":
         score -= 20
         flags.append("image_text_mismatch")
+    # ok → ceza yok
 
     # --- Fiyat kontrolü ---
     try:
@@ -77,8 +86,8 @@ def compute_quality_score(
         flags.append("invalid_stock")
 
     # --- Statü–stok tutarlılığı ---
-    st = (str(status or "")).strip().lower()
-    if st in {"aktif", "active"} and (s is not None and s == 0):
+    st_txt = (str(status_text if status_text is not None else status) or "").strip().lower()
+    if st_txt in {"aktif", "active"} and (s is not None and s == 0):
         score -= 10
         flags.append("active_but_out_of_stock")
 
