@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 
@@ -6,6 +5,7 @@ from modules.spelling import quick_spelling_checks
 from modules.category import suggest_category
 from modules.scoring import compute_quality_score
 from modules.vision import check_image_text_match_placeholder
+
 
 st.set_page_config(page_title="Akıllı Katalog Analiz — Demo (v2)", layout="wide")
 st.title("🧠 Otomatik Analiz")
