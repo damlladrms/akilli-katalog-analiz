@@ -31,7 +31,10 @@ def compute_quality_score(spell, input_category, suggested_category, img_match,
         flags.append("category_mismatch")
 
     # Görsel uyumu (placeholder kontrol)
-    if not img_matc_
+  if not img_match.get("match", False):
+    score -= 20
+    flags.append("image_text_mismatch")
+
 # kalite_skori.py
 
 def compute_quality_score(spell, input_category, suggested_category, img_match,
